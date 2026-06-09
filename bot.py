@@ -6,7 +6,8 @@ import sqlite3
 from datetime import datetime
 
 # ===== تنظیمات =====
-TOKEN = "8476684193:AAHzd_PU7mKpsmX1EvjxNUQI9c6yX5zJMvU"
+import os
+TOKEN = os.environ.get("TOKEN")
 ADMIN_ID = 6595586966  # آیدی عددی تلگرام خودت
 
 # ===== دیتابیس =====
