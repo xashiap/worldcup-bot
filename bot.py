@@ -9,6 +9,32 @@ from telegram.ext import (
 TOKEN = os.environ.get("TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 
+RULES_TEXT = """📜 قوانین مسابقه پیش‌بینی جام جهانی ۲۰۲۶
+
+👤 ثبت‌نام
+هر نفر فقط با یک کد ملی می‌تونه شرکت کنه.
+
+⚽ پیش‌بینی
+قبل از شروع هر بازی می‌تونی نتیجه دقیق رو پیش‌بینی کنی.
+بعد از قفل شدن بازی دیگه امکان پیش‌بینی وجود نداره.
+
+🎯 امتیازدهی
+
+🥇 پیش‌بینی دقیق نتیجه — ۱۰ امتیاز
+مثال: نتیجه واقعی ایران ۲ - آمریکا ۱ / پیش‌بینی تو: ایران ۲ - آمریکا ۱
+
+🥈 تفاضل گل درست — ۷ امتیاز
+مثال: نتیجه واقعی ایران ۳ - آمریکا ۱ / پیش‌بینی تو: ایران ۲ - آمریکا ۰ (تفاضل هر دو ۲ تاست)
+
+🥉 پیش‌بینی تیم برنده یا تساوی — ۵ امتیاز
+مثال: نتیجه واقعی ایران ۳ - آمریکا ۱ / پیش‌بینی تو: ایران ۵ - آمریکا ۲ (برنده رو درست گفتی)
+
+✅ شرکت در پیش‌بینی — ۲ امتیاز
+مثال: نتیجه واقعی ایران ۲ - آمریکا ۰ / پیش‌بینی تو: آمریکا ۱ - ایران ۰ (کلاً اشتباه ولی شرکت کردی)
+
+🏆 جدول امتیازات
+امتیازات هر دور و امتیاز کل به صورت جداگانه نمایش داده میشه."""
+
 # States
 (REGISTER_NATIONAL_ID, REGISTER_NAME,
  MAIN_MENU, PREDICT_ROUND, PREDICT_MATCH_SELECT,
@@ -216,10 +242,23 @@ def get_user_total_score(user_id):
     conn.close()
     return row[0] if row else 0
 
+def get_all_users_full():
+    conn = sqlite3.connect("worldcup.db")
+    c = conn.cursor()
+    c.execute('''SELECT u.user_id, u.national_id, u.full_name, COALESCE(SUM(p.points),0) as score
+                 FROM users u
+                 LEFT JOIN predictions p ON u.user_id=p.user_id AND p.points IS NOT NULL
+                 GROUP BY u.user_id
+                 ORDER BY score DESC''')
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
 # ===== Keyboards =====
 def main_keyboard():
     return ReplyKeyboardMarkup(
-        [[KeyboardButton("⚽ شروع پیش‌بینی"), KeyboardButton("🏆 امتیازات")]],
+        [[KeyboardButton("⚽ شروع پیش‌بینی"), KeyboardButton("🏆 امتیازات")],
+         [KeyboardButton("📜 قوانین")]],
         resize_keyboard=True
     )
 
@@ -247,7 +286,7 @@ def matches_keyboard(matches, user_id):
         pred = get_prediction(user_id, mid)
         label = f"{team1} vs {team2}"
         if pred:
-            label += f" ✅"
+            label += " ✅"
         if locked or g1 is not None:
             label += " 🔒"
         buttons.append([KeyboardButton(label)])
@@ -305,6 +344,10 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "⚽ شروع پیش‌بینی":
         await update.message.reply_text("کدوم دور؟", reply_markup=round_keyboard())
         return PREDICT_ROUND
+
+    elif text == "📜 قوانین":
+        await update.message.reply_text(RULES_TEXT, reply_markup=main_keyboard())
+        return MAIN_MENU
 
     elif text == "🏆 امتیازات":
         user_id = update.effective_user.id
@@ -373,8 +416,7 @@ async def predict_match_select(update: Update, context: ContextTypes.DEFAULT_TYP
     selected = None
     for m in matches:
         mid, team1, team2, date, round_num, g1, g2, locked = m
-        label_base = f"{team1} vs {team2}"
-        if label_base in text:
+        if f"{team1} vs {team2}" in text:
             selected = m
             break
 
@@ -497,7 +539,7 @@ async def lock_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ بازی پیدا نشد.")
             return
         lock_match_db(match_id)
-        await update.message.reply_text(f"✅ بازی {m[1]} vs {m[2]} قفل شد. دیگه کسی نمی‌تونه پیش‌بینی کنه.")
+        await update.message.reply_text(f"✅ بازی {m[1]} vs {m[2]} قفل شد.")
     except:
         await update.message.reply_text("فرمت: /lockmatch شماره_بازی")
 
@@ -552,8 +594,24 @@ async def list_matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mid, t1, t2, date, rnd, g1, g2, locked = r
         result = f"{g1}-{g2}" if g1 is not None else "—"
         lock_icon = "🔒" if locked else "🔓"
-        msg += f"#{mid} | دور {rnd} | {t1} vs {t2} | {date} | نتیجه: {result} {lock_icon}\n"
+        msg += f"#{mid} | دور {rnd} | {t1} vs {t2} | {date} | {result} {lock_icon}\n"
     await update.message.reply_text(msg)
+
+async def users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    users = get_all_users_full()
+    if not users:
+        await update.message.reply_text("هنوز کاربری ثبت‌نام نکرده.")
+        return
+    msg = f"👥 لیست کاربران ({len(users)} نفر):\n\n"
+    for i, (uid, nid, name, score) in enumerate(users):
+        msg += f"{i+1}. {name}\n🪪 {nid} | 🆔 {uid} | 🏆 {score} امتیاز\n\n"
+        if len(msg) > 3500:
+            await update.message.reply_text(msg)
+            msg = ""
+    if msg:
+        await update.message.reply_text(msg)
 
 # ===== Main =====
 def main():
@@ -587,6 +645,7 @@ def main():
     app.add_handler(CommandHandler("deletematch", delete_match))
     app.add_handler(CommandHandler("lockmatch", lock_match))
     app.add_handler(CommandHandler("listmatches", list_matches))
+    app.add_handler(CommandHandler("users", users_list))
 
     print("✅ بات شروع به کار کرد...")
     app.run_polling()
