@@ -234,6 +234,31 @@ def get_user_score_by_round(user_id, round_num):
     conn.close()
     return row[0] if row else 0
 
+def get_leaderboard_knockout():
+    conn = sqlite3.connect("worldcup.db")
+    c = conn.cursor()
+    c.execute('''SELECT u.full_name, u.national_id, COALESCE(SUM(p.points),0) as score
+                 FROM users u
+                 JOIN predictions p ON u.user_id=p.user_id
+                 JOIN matches m ON p.match_id=m.id
+                 WHERE m.round IN (4,5,6,7,8) AND p.points IS NOT NULL AND p.points > 0
+                 GROUP BY u.user_id
+                 ORDER BY score DESC LIMIT 5''')
+    top5 = c.fetchall()
+    conn.close()
+    return top5
+
+def get_user_score_knockout(user_id):
+    conn = sqlite3.connect("worldcup.db")
+    c = conn.cursor()
+    c.execute('''SELECT COALESCE(SUM(p.points),0)
+                 FROM predictions p
+                 JOIN matches m ON p.match_id=m.id
+                 WHERE p.user_id=? AND m.round IN (4,5,6,7,8) AND p.points IS NOT NULL''', (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else 0
+
 def get_leaderboard_total():
     conn = sqlite3.connect("worldcup.db")
     c = conn.cursor()
@@ -390,13 +415,8 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
         msg = ""
 
-        round_sections = [
-            (1, "دور اول"), (2, "دور دوم"), (3, "دور سوم"),
-            (4, "یک شانزدهم نهایی"), (5, "یک هشتم نهایی"),
-            (6, "یک چهارم نهایی"), (7, "نیمه نهایی"), (8, "فینال و رده‌بندی")
-        ]
-
-        for rnum, rname in round_sections:
+        # دورهای گروهی
+        for rnum, rname in [(1, "دور اول"), (2, "دور دوم"), (3, "دور سوم")]:
             top = get_leaderboard_by_round(rnum)
             my_score = get_user_score_by_round(user_id, rnum)
             if not top and my_score == 0:
@@ -409,6 +429,20 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg += "هنوز امتیازی ثبت نشده\n"
             if my_score > 0:
                 msg += f"\n👤 امتیاز تو: {my_score} امتیاز\n"
+            msg += "\n➖➖➖➖➖➖➖➖\n\n"
+
+        # مراحل حذفی (4 تا 8 با هم)
+        knockout_top = get_leaderboard_knockout()
+        my_knockout = get_user_score_knockout(user_id)
+        if knockout_top or my_knockout > 0:
+            msg += "🏟 مراحل حذفی:\n"
+            if knockout_top:
+                for i, (name, nid, score) in enumerate(knockout_top):
+                    msg += f"{medals[i]} {name} ({nid[-4:]}) — {score} امتیاز\n"
+            else:
+                msg += "هنوز امتیازی ثبت نشده\n"
+            if my_knockout > 0:
+                msg += f"\n👤 امتیاز تو: {my_knockout} امتیاز\n"
             msg += "\n➖➖➖➖➖➖➖➖\n\n"
 
         top_total = get_leaderboard_total()
