@@ -176,6 +176,13 @@ def lock_match_db(match_id):
     conn.commit()
     conn.close()
 
+def unlock_match_db(match_id):
+    conn = sqlite3.connect("worldcup.db")
+    c = conn.cursor()
+    c.execute("UPDATE matches SET locked=0 WHERE id=?", (match_id,))
+    conn.commit()
+    conn.close()
+
 def calc_points(pg1, pg2, rg1, rg2):
     if pg1 == rg1 and pg2 == rg2:
         return 10
@@ -649,6 +656,20 @@ async def lock_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("فرمت: /lockmatch شماره_بازی")
 
+async def unlock_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    try:
+        match_id = int(context.args[0])
+        m = get_match(match_id)
+        if not m:
+            await update.message.reply_text("❌ بازی پیدا نشد.")
+            return
+        unlock_match_db(match_id)
+        await update.message.reply_text(f"✅ بازی {m[1]} vs {m[2]} آنلاک شد. کاربرا می‌تونن پیش‌بینی کنن.")
+    except:
+        await update.message.reply_text("فرمت: /unlockmatch شماره_بازی")
+
 async def reset_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -751,6 +772,7 @@ def main():
     app.add_handler(CommandHandler("setresult", set_result))
     app.add_handler(CommandHandler("deletematch", delete_match))
     app.add_handler(CommandHandler("lockmatch", lock_match))
+    app.add_handler(CommandHandler("unlockmatch", unlock_match))
     app.add_handler(CommandHandler("listmatches", list_matches))
     app.add_handler(CommandHandler("users", users_list))
 
