@@ -51,7 +51,7 @@ ROUND_NAMES = {v: k for k, v in ROUND_MAP.items()}
 
 # ===== DB =====
 def init_db():
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY,
@@ -83,7 +83,7 @@ def init_db():
     conn.close()
 
 def get_user(user_id):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
     row = c.fetchone()
@@ -91,7 +91,7 @@ def get_user(user_id):
     return row
 
 def get_all_user_ids():
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("SELECT user_id FROM users")
     rows = c.fetchall()
@@ -99,7 +99,7 @@ def get_all_user_ids():
     return [r[0] for r in rows]
 
 def national_id_exists(nid):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE national_id=?", (nid,))
     row = c.fetchone()
@@ -107,7 +107,7 @@ def national_id_exists(nid):
     return row is not None
 
 def register_user(user_id, national_id, phone, full_name):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     try:
         c.execute("INSERT INTO users (user_id, national_id, phone, full_name) VALUES (?,?,?,?)",
@@ -120,7 +120,7 @@ def register_user(user_id, national_id, phone, full_name):
     return result
 
 def get_matches_by_round(round_num):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("SELECT * FROM matches WHERE round=? ORDER BY date", (round_num,))
     rows = c.fetchall()
@@ -128,7 +128,7 @@ def get_matches_by_round(round_num):
     return rows
 
 def get_match(match_id):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("SELECT * FROM matches WHERE id=?", (match_id,))
     row = c.fetchone()
@@ -136,7 +136,7 @@ def get_match(match_id):
     return row
 
 def get_prediction(user_id, match_id):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("SELECT * FROM predictions WHERE user_id=? AND match_id=?", (user_id, match_id))
     row = c.fetchone()
@@ -144,7 +144,7 @@ def get_prediction(user_id, match_id):
     return row
 
 def save_prediction(user_id, match_id, g1, g2):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute('''INSERT INTO predictions (user_id, match_id, pred_goal1, pred_goal2)
                  VALUES (?,?,?,?)
@@ -154,7 +154,7 @@ def save_prediction(user_id, match_id, g1, g2):
     conn.close()
 
 def add_match_db(team1, team2, date, round_num):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("INSERT INTO matches (team1, team2, date, round) VALUES (?,?,?,?)",
               (team1, team2, date, round_num))
@@ -162,7 +162,7 @@ def add_match_db(team1, team2, date, round_num):
     conn.close()
 
 def delete_match_db(match_id):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("DELETE FROM predictions WHERE match_id=?", (match_id,))
     c.execute("DELETE FROM matches WHERE id=?", (match_id,))
@@ -170,14 +170,14 @@ def delete_match_db(match_id):
     conn.close()
 
 def lock_match_db(match_id):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("UPDATE matches SET locked=1 WHERE id=?", (match_id,))
     conn.commit()
     conn.close()
 
 def unlock_match_db(match_id):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("UPDATE matches SET locked=0 WHERE id=?", (match_id,))
     conn.commit()
@@ -197,7 +197,7 @@ def calc_points(pg1, pg2, rg1, rg2):
     return 2
 
 def set_result_db(match_id, g1, g2):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("UPDATE matches SET goal1=?, goal2=?, locked=1 WHERE id=?", (g1, g2, match_id))
     c.execute("SELECT user_id, pred_goal1, pred_goal2 FROM predictions WHERE match_id=?", (match_id,))
@@ -209,7 +209,7 @@ def set_result_db(match_id, g1, g2):
     conn.close()
 
 def reset_all_db():
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("DELETE FROM predictions")
     c.execute("UPDATE matches SET goal1=NULL, goal2=NULL, locked=0")
@@ -217,7 +217,7 @@ def reset_all_db():
     conn.close()
 
 def get_leaderboard_by_round(round_num):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute('''SELECT u.full_name, u.national_id, COALESCE(SUM(p.points),0) as score
                  FROM users u
@@ -231,7 +231,7 @@ def get_leaderboard_by_round(round_num):
     return top5
 
 def get_user_score_by_round(user_id, round_num):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute('''SELECT COALESCE(SUM(p.points),0)
                  FROM predictions p
@@ -242,7 +242,7 @@ def get_user_score_by_round(user_id, round_num):
     return row[0] if row else 0
 
 def get_leaderboard_knockout():
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute('''SELECT u.full_name, u.national_id, COALESCE(SUM(p.points),0) as score
                  FROM users u
@@ -256,7 +256,7 @@ def get_leaderboard_knockout():
     return top5
 
 def get_user_score_knockout(user_id):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute('''SELECT COALESCE(SUM(p.points),0)
                  FROM predictions p
@@ -267,7 +267,7 @@ def get_user_score_knockout(user_id):
     return row[0] if row else 0
 
 def get_leaderboard_total():
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute('''SELECT u.full_name, u.national_id, COALESCE(SUM(p.points),0) as score
                  FROM users u
@@ -280,7 +280,7 @@ def get_leaderboard_total():
     return top5
 
 def get_user_total_score(user_id):
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute('''SELECT COALESCE(SUM(points),0) FROM predictions
                  WHERE user_id=? AND points IS NOT NULL''', (user_id,))
@@ -289,7 +289,7 @@ def get_user_total_score(user_id):
     return row[0] if row else 0
 
 def get_all_users_full():
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute('''SELECT u.user_id, u.national_id, u.phone, u.full_name, COALESCE(SUM(p.points),0) as score
                  FROM users u
@@ -706,7 +706,7 @@ async def broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def list_matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
-    conn = sqlite3.connect("worldcup.db")
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("SELECT id, team1, team2, date, round, goal1, goal2, locked FROM matches ORDER BY round, date")
     rows = c.fetchall()
@@ -781,4 +781,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-  
