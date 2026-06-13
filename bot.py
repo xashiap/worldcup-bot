@@ -362,7 +362,14 @@ def goals_keyboard():
 def matches_keyboard(matches, user_id):
     buttons = []
     for m in matches:
-        mid, team1, team2, date, round_num, g1, g2, locked = m
+        mid = m[0]
+team1 = m[1]
+team2 = m[2]
+date = m[3]
+round_num = m[4]
+g1 = m[5]
+g2 = m[6]
+locked = m[7]
         pred = get_prediction(user_id, mid)
         label = f"{team1} vs {team2}"
         if pred:
@@ -553,7 +560,14 @@ async def predict_match_select(update: Update, context: ContextTypes.DEFAULT_TYP
     matches = context.user_data.get('matches', [])
     selected = None
     for m in matches:
-        mid, team1, team2, date, rnum, g1, g2, locked = m
+        mid = m[0]
+team1 = m[1]
+team2 = m[2]
+date = m[3]
+round_num = m[4]
+g1 = m[5]
+g2 = m[6]
+locked = m[7]
         if f"{team1} vs {team2}" in text:
             selected = m
             break
