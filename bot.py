@@ -70,8 +70,14 @@ def init_db():
         date TEXT, round INTEGER,
         goal1 INTEGER DEFAULT NULL,
         goal2 INTEGER DEFAULT NULL,
-        locked INTEGER DEFAULT 0
+        locked INTEGER DEFAULT 0,
+        multiplier INTEGER DEFAULT 1
     )''')
+    # Add multiplier column if not exists (for existing DBs)
+    try:
+        c.execute("ALTER TABLE matches ADD COLUMN multiplier INTEGER DEFAULT 1")
+    except:
+        pass
     c.execute('''CREATE TABLE IF NOT EXISTS predictions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER, match_id INTEGER,
@@ -200,11 +206,31 @@ def set_result_db(match_id, g1, g2):
     conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
     c.execute("UPDATE matches SET goal1=?, goal2=?, locked=1 WHERE id=?", (g1, g2, match_id))
+    c.execute("SELECT multiplier FROM matches WHERE id=?", (match_id,))
+    row = c.fetchone()
+    multiplier = row[0] if row and row[0] else 1
     c.execute("SELECT user_id, pred_goal1, pred_goal2 FROM predictions WHERE match_id=?", (match_id,))
     preds = c.fetchall()
     for (uid, pg1, pg2) in preds:
-        pts = calc_points(pg1, pg2, g1, g2)
+        pts = calc_points(pg1, pg2, g1, g2) * multiplier
         c.execute("UPDATE predictions SET points=? WHERE user_id=? AND match_id=?", (pts, uid, match_id))
+    conn.commit()
+    conn.close()
+
+def set_multiplier_db(match_id, multiplier):
+    conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
+    c = conn.cursor()
+    c.execute("UPDATE matches SET multiplier=? WHERE id=?", (multiplier, match_id))
+    # If result already set, recalculate points with new multiplier
+    c.execute("SELECT goal1, goal2 FROM matches WHERE id=?", (match_id,))
+    row = c.fetchone()
+    if row and row[0] is not None:
+        g1, g2 = row[0], row[1]
+        c.execute("SELECT user_id, pred_goal1, pred_goal2 FROM predictions WHERE match_id=?", (match_id,))
+        preds = c.fetchall()
+        for (uid, pg1, pg2) in preds:
+            pts = calc_points(pg1, pg2, g1, g2) * multiplier
+            c.execute("UPDATE predictions SET points=? WHERE user_id=? AND match_id=?", (pts, uid, match_id))
     conn.commit()
     conn.close()
 
@@ -375,7 +401,7 @@ async def get_national_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "✅ کد ملی ثبت شد.\n\n"
         "📱 شماره موبایل خودت رو وارد کن:\n"
-        "(برای هماهنگی دریافت جایزه)"
+        "(برای هماهنگی دریافت جایزه/اعداد به انگلیسی وارد شود)"
     )
     return REGISTER_PHONE
 
@@ -656,6 +682,27 @@ async def lock_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("فرمت: /lockmatch شماره_بازی")
 
+async def set_multiplier(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    try:
+        match_id = int(context.args[0])
+        multiplier = int(context.args[1])
+        if multiplier < 1:
+            await update.message.reply_text("❌ ضریب باید ۱ یا بیشتر باشه.")
+            return
+        m = get_match(match_id)
+        if not m:
+            await update.message.reply_text("❌ بازی پیدا نشد.")
+            return
+        set_multiplier_db(match_id, multiplier)
+        await update.message.reply_text(
+            f"✅ ضریب بازی {m[1]} vs {m[2]} برابر {multiplier} شد.\n"
+            f"امتیازات این بازی (اگه نتیجه ثبت شده باشه) بازمحاسبه شدن."
+        )
+    except:
+        await update.message.reply_text("فرمت: /setmultiplier شماره_بازی ضریب\nمثال: /setmultiplier 5 2")
+
 async def unlock_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -708,7 +755,7 @@ async def list_matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     conn = sqlite3.connect(os.environ.get('DB_PATH', 'worldcup.db'))
     c = conn.cursor()
-    c.execute("SELECT id, team1, team2, date, round, goal1, goal2, locked FROM matches ORDER BY round, date")
+    c.execute("SELECT id, team1, team2, date, round, goal1, goal2, locked, multiplier FROM matches ORDER BY round, date")
     rows = c.fetchall()
     conn.close()
     if not rows:
@@ -716,11 +763,12 @@ async def list_matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     msg = "📋 لیست بازی‌ها:\n\n"
     for r in rows:
-        mid, t1, t2, date, rnd, g1, g2, locked = r
+        mid, t1, t2, date, rnd, g1, g2, locked, mult = r
         result = f"{g1}-{g2}" if g1 is not None else "—"
         lock_icon = "🔒" if locked else "🔓"
         rname = ROUND_NAMES.get(rnd, str(rnd))
-        msg += f"#{mid} | {rname} | {t1} vs {t2} | {date} | {result} {lock_icon}\n"
+        mult_text = f" | x{mult}" if mult and mult > 1 else ""
+        msg += f"#{mid} | {rname} | {t1} vs {t2} | {date} | {result} {lock_icon}{mult_text}\n"
     await update.message.reply_text(msg)
 
 async def users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -772,6 +820,7 @@ def main():
     app.add_handler(CommandHandler("setresult", set_result))
     app.add_handler(CommandHandler("deletematch", delete_match))
     app.add_handler(CommandHandler("lockmatch", lock_match))
+    app.add_handler(CommandHandler("setmultiplier", set_multiplier))
     app.add_handler(CommandHandler("unlockmatch", unlock_match))
     app.add_handler(CommandHandler("listmatches", list_matches))
     app.add_handler(CommandHandler("users", users_list))
