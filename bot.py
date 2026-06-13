@@ -362,7 +362,7 @@ def goals_keyboard():
 def matches_keyboard(matches, user_id):
     buttons = []
     for m in matches:
-        mid, team1, team2, date, round_num, g1, g2, locked = m
+        mid, team1, team2, date, round_num, g1, g2, locked = m[:8]
         pred = get_prediction(user_id, mid)
         label = f"{team1} vs {team2}"
         if pred:
@@ -553,7 +553,7 @@ async def predict_match_select(update: Update, context: ContextTypes.DEFAULT_TYP
     matches = context.user_data.get('matches', [])
     selected = None
     for m in matches:
-        mid, team1, team2, date, rnum, g1, g2, locked = m
+        mid, team1, team2, date, rnum, g1, g2, locked = m[:8]
         if f"{team1} vs {team2}" in text:
             selected = m
             break
@@ -562,7 +562,7 @@ async def predict_match_select(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("بازی رو از لیست انتخاب کن:")
         return PREDICT_MATCH_SELECT
 
-    mid, team1, team2, date, rnum, g1, g2, locked = selected
+    mid, team1, team2, date, rnum, g1, g2, locked = selected[:8]
 
     if locked or g1 is not None:
         await update.message.reply_text("🔒 پیش‌بینی این بازی بسته شده.")
